@@ -22,7 +22,7 @@ class DatabaseConnection:
             self._connection = mysql.connector.connect(
                 host="localhost",
                 user="root",
-                password="YourPasswordHere",  
+                password="Ash1234",  
                 database="employee_analytics_dw"
             )
 
