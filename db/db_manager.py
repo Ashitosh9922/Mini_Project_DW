@@ -22,7 +22,7 @@ class DatabaseConnection:
             self._connection = mysql.connector.connect(
                 host="localhost",
                 user="root",
-                password="Ash1234",  
+                password="your_password_here",  
                 database="employee_analytics_dw"
             )
 
@@ -50,7 +50,7 @@ class DatabaseConnection:
         try:
             cursor = conn.cursor()
 
-            if params:
+            if params is not None:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
@@ -79,7 +79,7 @@ class DatabaseConnection:
         try:
             cursor = conn.cursor(dictionary=True)
 
-            if params:
+            if params is not None:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)

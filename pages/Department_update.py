@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-from db.db_manager import DatabaseConnection
+from managers.employee_manager import EmployeeManager
 
 
 st.set_page_config(
@@ -12,11 +12,11 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_db():
-    return DatabaseConnection()
+def get_manager():
+    return EmployeeManager()
 
 
-db = get_db()
+manager = get_manager()
 
 
 st.title("🔄 Department Update & SCD Type 2")
@@ -29,11 +29,26 @@ st.write(
 st.divider()
 
 
-# ---------------------------------------------------------
-# LOAD EMPLOYEES
-# ---------------------------------------------------------
+# EMPLOYEE SEARCH
 
-employees = db.fetch(
+st.subheader("👤 Find Employee")
+
+employee_search = st.text_input(
+    "Employee ID",
+    placeholder="Enter employee ID"
+).strip()
+
+
+if not employee_search:
+
+    st.info(
+        "Enter an Employee ID to continue."
+    )
+
+    st.stop()
+
+
+employees = manager.db.fetch(
     """
     SELECT
         employee_id,
@@ -42,40 +57,57 @@ employees = db.fetch(
         department_id,
         job_role
     FROM employees
-    ORDER BY employee_id
-    """
+    WHERE employee_id = %s
+    """,
+    (employee_search,)
 )
 
-departments = db.fetch(
+
+if not employees:
+
+    st.error(
+        f"Employee {employee_search} was not found."
+    )
+
+    st.stop()
+
+
+selected_employee = employees[0]
+
+employee_id = selected_employee["employee_id"]
+current_department_id = selected_employee["department_id"]
+
+
+st.success(
+    f"Employee: {selected_employee['first_name']} "
+    f"{selected_employee['last_name']} "
+    f"({employee_id})"
+)
+
+st.write(
+    f"**Job Role:** {selected_employee['job_role']}"
+)
+
+
+# LOAD DEPARTMENTS FROM DATABASE
+
+departments = manager.db.fetch(
     """
     SELECT
         department_id,
         department_name
     FROM departments
-    ORDER BY department_id
+    ORDER BY department_name
     """
 )
 
 
-if not employees:
-    st.error("No employees found.")
-    st.stop()
-
 if not departments:
+
     st.error("No departments found.")
+
     st.stop()
 
-
-# ---------------------------------------------------------
-# EMPLOYEE SELECTION
-# ---------------------------------------------------------
-
-employee_options = {
-    f"{row['employee_id']} - "
-    f"{row['first_name']} {row['last_name']}":
-        row
-    for row in employees
-}
 
 department_options = {
     f"{row['department_id']} - {row['department_name']}":
@@ -84,30 +116,7 @@ department_options = {
 }
 
 
-st.subheader("👤 Select Employee")
-
-
-selected_employee_name = st.selectbox(
-    "Employee",
-    list(employee_options.keys())
-)
-
-selected_employee = employee_options[
-    selected_employee_name
-]
-
-employee_id = selected_employee["employee_id"]
-
-current_department_id = selected_employee[
-    "department_id"
-]
-
-
-# ---------------------------------------------------------
-# CURRENT DEPARTMENT
-# ---------------------------------------------------------
-
-current_department = db.fetch(
+current_department = manager.db.fetch(
     """
     SELECT department_name
     FROM departments
@@ -118,6 +127,7 @@ current_department = db.fetch(
 
 
 if current_department:
+
     st.info(
         f"Current Department: "
         f"{current_department[0]['department_name']}"
@@ -127,9 +137,7 @@ if current_department:
 st.divider()
 
 
-# ---------------------------------------------------------
-# DEPARTMENT UPDATE
-# ---------------------------------------------------------
+# UPDATE DEPARTMENT
 
 st.subheader("🏢 Change Department")
 
@@ -165,19 +173,11 @@ if submitted:
 
     else:
 
-        query = """
-            CALL sp_update_employee_department(
-                %s, %s, %s
-            )
-        """
-
-        params = (
+        result = manager.update_department(
             employee_id,
             new_department_id,
             change_date
         )
-
-        result = db.execute(query, params)
 
         if result:
 
@@ -186,75 +186,25 @@ if submitted:
                 f"for employee {employee_id}."
             )
 
-            st.info(
-                "The previous employee version should "
-                "remain available as historical data."
-            )
-
-            st.cache_resource.clear()
+            st.rerun()
 
         else:
 
             st.error(
-                "Unable to update department."
+                "Unable to update department. "
+                "Please check the database error."
             )
 
 
 st.divider()
 
 
-# ---------------------------------------------------------
-# OLTP HISTORY
-# ---------------------------------------------------------
+# OLAP SCD2 HISTORY
 
-st.subheader("📜 Employee History")
+st.subheader("⭐ Employee SCD Type 2 History")
 
 
-history = db.fetch(
-    """
-    SELECT
-        history_id,
-        employee_id,
-        department_id,
-        effective_start_date,
-        effective_end_date,
-        is_current
-    FROM employee_history
-    WHERE employee_id = %s
-    ORDER BY effective_start_date
-    """,
-    (employee_id,)
-)
-
-
-if history:
-
-    history_df = pd.DataFrame(history)
-
-    st.dataframe(
-        history_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-else:
-
-    st.info(
-        "No employee history records found."
-    )
-
-
-st.divider()
-
-
-# ---------------------------------------------------------
-# OLAP SCD TYPE 2 HISTORY
-# ---------------------------------------------------------
-
-st.subheader("⭐ OLAP Employee SCD Type 2 History")
-
-
-dimension_history = db.fetch(
+dimension_history = manager.db.fetch(
     """
     SELECT
         employee_sk,
@@ -279,6 +229,13 @@ if dimension_history:
         dimension_history
     )
 
+    dimension_df["status"] = dimension_df[
+        "is_current"
+    ].apply(
+        lambda value:
+        "Current" if value == 1 else "Historical"
+    )
+
     st.dataframe(
         dimension_df,
         use_container_width=True,
@@ -288,6 +245,5 @@ if dimension_history:
 else:
 
     st.warning(
-        "No SCD Type 2 dimension record found "
-        "for this employee."
+        "No SCD Type 2 dimension records found."
     )

@@ -316,19 +316,13 @@ st.markdown(
 )
 
 
-yearly = analytics_manager.get_average_performance_by_year()
-
+yearly = analytics_manager.get_year_over_year_performance()
 
 if yearly:
 
-    yearly_df = pd.DataFrame(
-        yearly
-    )
+    yearly_df = pd.DataFrame(yearly)
 
-    yearly_df["year"] = (
-        yearly_df["year"]
-        .astype(str)
-    )
+    yearly_df["year"] = yearly_df["year_number"].astype(str)
 
     chart_col, table_col = st.columns(
         [2, 1],
@@ -347,7 +341,7 @@ if yearly:
             x="year",
             y="average_score",
             markers=True,
-            title="Average Performance by Year"
+            title="Year-over-Year Performance"
         )
 
         fig.update_layout(
@@ -375,7 +369,14 @@ if yearly:
     with table_col:
 
         st.dataframe(
-            yearly_df,
+            yearly_df[
+                [
+                    "year_number",
+                    "average_score",
+                    "previous_year_score",
+                    "score_change"
+                ]
+            ],
             use_container_width=True,
             hide_index=True
         )

@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-from db.db_manager import DatabaseConnection
+from models.project import Project
+from managers.project_manager import ProjectManager
 
 
 st.set_page_config(
@@ -13,17 +14,19 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_db():
-    return DatabaseConnection()
+def get_manager():
+    return ProjectManager()
 
 
-db = get_db()
+manager = get_manager()
 
 
-st.title("📁 Project Assignment")
+# PAGE HEADER
+
+st.title("📁 Project Management")
 
 st.write(
-    "Assign an employee to a project and manage project allocation."
+    "Create projects, assign employees, and monitor project allocation."
 )
 
 st.divider()
@@ -31,7 +34,7 @@ st.divider()
 
 # LOAD EMPLOYEES
 
-employees = db.fetch(
+employees = manager.db.fetch(
     """
     SELECT
         employee_id,
@@ -45,209 +48,133 @@ employees = db.fetch(
 )
 
 
-# LOAD PROJECTS
+# LOAD DEPARTMENTS
 
-projects = db.fetch(
+departments = manager.db.fetch(
     """
     SELECT
-        project_id,
-        project_name,
         department_id,
-        start_date,
-        end_date,
-        budget,
-        status
-    FROM projects
-    ORDER BY project_id
+        department_name
+    FROM departments
+    ORDER BY department_name
     """
 )
 
 
-if not employees:
-    st.error("No employees found.")
-    st.stop()
+# SUCCESS / ERROR MESSAGES
 
-if not projects:
-    st.error("No projects found.")
-    st.stop()
+if "project_success_message" in st.session_state:
 
-
-employee_options = {
-    f"{row['employee_id']} - {row['first_name']} {row['last_name']}": row["employee_id"]
-    for row in employees
-}
-
-project_options = {
-    f"{row['project_id']} - {row['project_name']}": row["project_id"]
-    for row in projects
-}
-
-
-# ASSIGNMENT FORM
-
-st.subheader("➕ Assign Employee to Project")
-
-
-with st.form("project_assignment_form"):
-
-    employee_name = st.selectbox(
-        "Employee",
-        list(employee_options.keys())
+    st.success(
+        st.session_state["project_success_message"]
     )
 
-    project_name = st.selectbox(
-        "Project",
-        list(project_options.keys())
+    del st.session_state["project_success_message"]
+
+
+if "assignment_success_message" in st.session_state:
+
+    st.success(
+        st.session_state["assignment_success_message"]
     )
 
-    allocation_percent = st.slider(
-        "Allocation Percentage",
-        min_value=10,
-        max_value=100,
-        value=100,
-        step=10
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        start_date = st.date_input(
-            "Assignment Start Date"
-        )
-
-    with col2:
-        end_date = st.date_input(
-            "Assignment End Date"
-        )
-
-    submitted = st.form_submit_button(
-        "Assign Employee"
-    )
-
-
-if submitted:
-
-    employee_id = employee_options[employee_name]
-    project_id = project_options[project_name]
-
-    if end_date < start_date:
-        st.error(
-            "Assignment end date cannot be before the start date."
-        )
-
-    else:
-
-        query = """
-            CALL sp_assign_employee_to_project(
-                %s, %s, %s, %s, %s
-            )
-        """
-
-        params = (
-            employee_id,
-            project_id,
-            allocation_percent,
-            start_date,
-            end_date
-        )
-
-        result = db.execute(query, params)
-
-        if result:
-            st.success(
-                f"Employee {employee_id} assigned successfully "
-                f"to project {project_id}."
-            )
-
-            st.cache_resource.clear()
-
-        else:
-            st.error(
-                "Unable to assign employee. "
-                "Check the database error message."
-            )
-
-
-st.divider()
+    del st.session_state["assignment_success_message"]
 
 
 # CREATE PROJECT
 
+st.subheader("➕ Create New Project")
 
-st.subheader("Create New Project")
 
-with st.form("create_project_form"):
+if not departments:
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        project_id = st.number_input(
-            "Project ID",
-            min_value=1,
-            step=1
-        )
-
-        project_name = st.text_input(
-            "Project Name"
-        )
-
-        department_options = {
-            row["department_name"]: row["department_id"]
-            for row in db.fetch("""
-                SELECT department_id, department_name
-                FROM departments
-                ORDER BY department_name
-            """)
-        }
-
-        selected_department = st.selectbox(
-            "Department",
-            options=list(department_options.keys())
-        )
-
-        start_date = st.date_input(
-            "Start Date",
-            value=date.today()
-        )
-
-    with col2:
-
-        end_date = st.date_input(
-            "End Date",
-            value=date.today()
-        )
-
-        budget = st.number_input(
-            "Budget",
-            min_value=0.0,
-            step=1000.0,
-            format="%.2f"
-        )
-
-        status = st.selectbox(
-            "Status",
-            [
-                "Planned",
-                "Active",
-                "Completed",
-                "On Hold"
-            ]
-        )
-
-    submitted = st.form_submit_button(
-        "Create Project"
+    st.warning(
+        "No departments are available. "
+        "A project cannot be created until at least one department exists."
     )
 
-    if submitted:
+else:
+
+    department_options = {
+        row["department_name"]: row["department_id"]
+        for row in departments
+    }
+
+    with st.form("create_project_form"):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            project_id = st.number_input(
+                "Project ID",
+                min_value=1,
+                step=1,
+                value=1
+            )
+
+            project_name = st.text_input(
+                "Project Name",
+                placeholder="Enter project name"
+            )
+
+            selected_department = st.selectbox(
+                "Department",
+                options=list(department_options.keys())
+            )
+
+            project_start_date = st.date_input(
+                "Project Start Date",
+                value=date.today()
+            )
+
+        with col2:
+
+            project_end_date = st.date_input(
+                "Project End Date",
+                value=date.today()
+            )
+
+            budget = st.number_input(
+                "Budget",
+                min_value=0.0,
+                step=1000.0,
+                value=0.0,
+                format="%.2f"
+            )
+
+            status = st.selectbox(
+                "Project Status",
+                [
+                    "Planned",
+                    "Active",
+                    "Completed",
+                    "On Hold"
+                ]
+            )
+
+        create_project_submitted = st.form_submit_button(
+            "Create Project"
+        )
+
+
+    # -----------------------------------------------------
+    # CREATE PROJECT ACTION
+    # -----------------------------------------------------
+
+    if create_project_submitted:
 
         if not project_name.strip():
-            st.error("Project name is required.")
 
-        elif end_date < start_date:
-            st.error("End date cannot be before start date.")
+            st.error(
+                "Project name is required."
+            )
 
-        elif not selected_department:
-            st.error("Please select a department.")
+        elif project_end_date < project_start_date:
+
+            st.error(
+                "Project end date cannot be before project start date."
+            )
 
         else:
 
@@ -255,50 +182,207 @@ with st.form("create_project_form"):
                 selected_department
             ]
 
-            query = """
-                CALL sp_add_project(
-                    %s, %s, %s, %s, %s, %s, %s
-                )
-            """
+            # Check whether Project ID already exists.
 
-            success = db.execute(
-                query,
-                (
-                    int(project_id),
-                    project_name.strip(),
-                    selected_department_id,
-                    start_date,
-                    end_date,
-                    budget,
-                    status
+            existing_project = manager.db.fetch(
+                """
+                SELECT project_id
+                FROM projects
+                WHERE project_id = %s
+                """,
+                (int(project_id),)
+            )
+
+            if existing_project:
+
+                st.error(
+                    f"Project ID {int(project_id)} already exists. "
+                    "Please use a different Project ID."
                 )
+
+            else:
+
+                project = Project(
+                    project_id=int(project_id),
+                    project_name=project_name.strip(),
+                    department_id=selected_department_id,
+                    start_date=project_start_date,
+                    end_date=project_end_date,
+                    budget=budget,
+                    status=status
+                )
+
+                success = manager.add_project(project)
+
+                if success:
+
+                    # Store message before rerun.
+                    st.session_state[
+                        "project_success_message"
+                    ] = (
+                        f"Project '{project_name.strip()}' "
+                        f"created successfully."
+                    )
+
+                    st.rerun()
+
+                else:
+
+                    st.error(
+                        "Unable to create project. "
+                        "Please check the database error message."
+                    )
+
+
+st.divider()
+
+
+# ASSIGN EMPLOYEE TO PROJECT
+
+st.subheader("➕ Assign Employee to Project")
+
+
+# Reload projects so newly created projects appear.
+
+projects = manager.get_projects()
+
+
+if not employees:
+
+    st.error(
+        "No employees found. Please onboard an employee first."
+    )
+
+elif not projects:
+
+    st.error(
+        "No projects found. Please create a project first."
+    )
+
+else:
+
+    employee_options = {
+        f"{row['employee_id']} - "
+        f"{row['first_name']} {row['last_name']}":
+        row["employee_id"]
+        for row in employees
+    }
+
+    project_options = {
+        f"{row['project_id']} - {row['project_name']}":
+        row["project_id"]
+        for row in projects
+    }
+
+    with st.form("project_assignment_form"):
+
+        employee_name = st.selectbox(
+            "Employee",
+            list(employee_options.keys())
+        )
+
+        project_name_selection = st.selectbox(
+            "Project",
+            list(project_options.keys())
+        )
+
+        allocation_percent = st.slider(
+            "Allocation Percentage",
+            min_value=10,
+            max_value=100,
+            value=100,
+            step=10
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            assignment_start_date = st.date_input(
+                "Assignment Start Date",
+                value=date.today()
+            )
+
+        with col2:
+
+            assignment_end_date = st.date_input(
+                "Assignment End Date",
+                value=date.today()
+            )
+
+        assign_submitted = st.form_submit_button(
+            "Assign Employee"
+        )
+
+
+    # -----------------------------------------------------
+    # ASSIGNMENT ACTION
+    # -----------------------------------------------------
+
+    if assign_submitted:
+
+        employee_id = employee_options[
+            employee_name
+        ]
+
+        project_id = project_options[
+            project_name_selection
+        ]
+
+        if assignment_end_date < assignment_start_date:
+
+            st.error(
+                "Assignment end date cannot be before "
+                "assignment start date."
+            )
+
+        else:
+
+            success = manager.assign_employee(
+                employee_id=employee_id,
+                project_id=project_id,
+                allocation_percent=allocation_percent,
+                start_date=assignment_start_date,
+                end_date=assignment_end_date
             )
 
             if success:
-                st.success(
-                    f"Project '{project_name}' created successfully."
+
+                st.session_state[
+                    "assignment_success_message"
+                ] = (
+                    f"Employee {employee_id} assigned successfully "
+                    f"to project {project_id}."
                 )
 
-                st.cache_resource.clear()
                 st.rerun()
 
             else:
+
                 st.error(
-                    "Unable to create project. "
-                    "Check whether the Project ID already exists."
+                    "Unable to assign employee. "
+                    "Please check the database error message."
                 )
 
-# CURRENT ASSIGNMENTS
+
+st.divider()
+
+
+# CURRENT PROJECT ASSIGNMENTS
 
 st.subheader("📋 Current Project Assignments")
 
 
-assignments = db.fetch(
+assignments = manager.db.fetch(
     """
     SELECT
         ep.assignment_id,
         ep.employee_id,
-        CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
+        CONCAT(
+            e.first_name,
+            ' ',
+            e.last_name
+        ) AS employee_name,
         ep.project_id,
         p.project_name,
         ep.allocation_percent,
@@ -327,24 +411,34 @@ if assignments:
 
 else:
 
-    st.info("No project assignments found.")
+    st.info(
+        "No project assignments found."
+    )
 
 
 st.divider()
 
 
-# PROJECT SUMMARY
+# PROJECT ALLOCATION SUMMARY
 
 st.subheader("📊 Project Allocation Summary")
 
+st.write(
+    "Overview of employee assignments and total allocation "
+    "across projects."
+)
 
-summary = db.fetch(
+
+summary = manager.db.fetch(
     """
     SELECT
         p.project_id,
         p.project_name,
         COUNT(ep.assignment_id) AS employee_count,
-        COALESCE(SUM(ep.allocation_percent), 0) AS total_allocation
+        COALESCE(
+            SUM(ep.allocation_percent),
+            0
+        ) AS total_allocation
     FROM projects p
     LEFT JOIN employee_projects ep
         ON p.project_id = ep.project_id
@@ -361,20 +455,29 @@ if summary:
 
     summary_df = pd.DataFrame(summary)
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(
+        [2, 1],
+        gap="large"
+    )
 
     with col1:
+
         st.bar_chart(
-            summary_df.set_index("project_name")[
-                "employee_count"
-            ]
+            summary_df.set_index(
+                "project_name"
+            )["employee_count"]
         )
 
     with col2:
+
         st.dataframe(
             summary_df,
             use_container_width=True,
             hide_index=True
         )
 
+else:
 
+    st.info(
+        "No project allocation data available."
+    )

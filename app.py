@@ -1,8 +1,6 @@
 import streamlit as st
 
-# ---------------------------------------------------------
 # Page Configuration
-# ---------------------------------------------------------
 st.set_page_config(
     page_title="Employee Analytics DW",
     page_icon="📊",
@@ -10,9 +8,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------------------------------------------------
 # Custom CSS
-# ---------------------------------------------------------
 st.markdown("""
 <style>
     /* Main background */
@@ -164,9 +160,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
 # Hero Section
-# ---------------------------------------------------------
 st.markdown("""
 <div class="hero">
     <div class="hero-badge">🏢 ENTERPRISE DATA PLATFORM</div>
@@ -179,9 +173,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
 # KPI Section
-# ---------------------------------------------------------
 st.markdown(
     '<div class="section-title">📈 Workforce Overview</div>',
     unsafe_allow_html=True
@@ -233,9 +225,7 @@ with col4:
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
 # Platform Capabilities
-# ---------------------------------------------------------
 st.markdown(
     '<div class="section-title">⚡ Platform Capabilities</div>',
     unsafe_allow_html=True
@@ -321,9 +311,7 @@ with col3:
     """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
 # Navigation Banner
-# ---------------------------------------------------------
 st.markdown("""
 <div class="info-banner">
     <strong>💡 Getting Started</strong><br>
@@ -334,9 +322,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
 # Footer
-# ---------------------------------------------------------
 st.markdown("""
 <div style="
     text-align:center;
