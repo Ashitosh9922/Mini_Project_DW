@@ -1,5 +1,9 @@
+import os
 import mysql.connector
 from mysql.connector import Error
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class DatabaseConnection:
@@ -20,10 +24,10 @@ class DatabaseConnection:
 
         try:
             self._connection = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="your_password_here",  
-                database="employee_analytics_dw"
+                host=os.getenv("DB_HOST"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME")
             )
 
             return self._connection
